@@ -6,6 +6,17 @@ interface ApiOptions {
   headers?: Record<string, string>;
 }
 
+export class ApiError extends Error {
+  constructor(
+    message: string,
+    public status: number,
+    public errors?: { field: string; message: string }[]
+  ) {
+    super(message);
+    this.name = "ApiError";
+  }
+}
+
 export async function apiClient<T = unknown>(endpoint: string, options: ApiOptions = {}): Promise<T> {
   const { method = "GET", body, headers = {} } = options;
 
@@ -22,7 +33,29 @@ export async function apiClient<T = unknown>(endpoint: string, options: ApiOptio
   const data = await res.json();
 
   if (!res.ok) {
-    throw new Error(data.error || "Something went wrong");
+    if (res.status === 401 && typeof window !== "undefined") {
+      const pathname = window.location.pathname;
+      if (pathname !== "/login" && pathname !== "/register") {
+        window.location.href = "/login";
+      }
+    }
+    throw new ApiError(data.error || "Something went wrong", res.status, data.errors);
+  }
+
+  return data;
+}
+
+export async function apiUpload<T = unknown>(endpoint: string, formData: FormData): Promise<T> {
+  const res = await fetch(`${BASE_URL}${endpoint}`, {
+    method: "POST",
+    credentials: "include",
+    body: formData,
+  });
+
+  const data = await res.json();
+
+  if (!res.ok) {
+    throw new ApiError(data.error || "Upload failed", res.status);
   }
 
   return data;
