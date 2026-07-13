@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { Menu, X, Calendar} from "lucide-react";
+import { Menu, X, Calendar, LayoutDashboard, LogOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/components/providers";
 
@@ -13,17 +13,10 @@ const navItems = [
   { label: "Contact", href: "/contact" },
 ];
 
-const loggedInItems = [
-  { label: "My Events", href: "/events/manage" },
-  { label: "Add Event", href: "/events/add" },
-];
-
 export function Navbar() {
   const [open, setOpen] = useState(false);
   const { user, logout } = useAuth();
   const isLoggedIn = !!user;
-
-  const items = isLoggedIn ? [...navItems, ...loggedInItems] : navItems;
 
   return (
     <header className="sticky top-0 z-50 w-full border-b bg-background/80 backdrop-blur-md">
@@ -34,7 +27,7 @@ export function Navbar() {
         </Link>
 
         <nav className="hidden md:flex items-center gap-6">
-          {items.map((item) => (
+          {navItems.map((item) => (
             <Link
               key={item.href}
               href={item.href}
@@ -47,12 +40,34 @@ export function Navbar() {
 
         <div className="hidden md:flex items-center gap-3">
           {isLoggedIn ? (
-            <>
-              <span className="text-sm text-muted-foreground">{user.name}</span>
-              <Button variant="outline" size="sm" onClick={logout}>
-                Logout
-              </Button>
-            </>
+            <div className="relative group">
+              <button className="flex items-center gap-2.5 px-2 py-1.5 rounded-lg hover:bg-muted transition-colors">
+                <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center text-primary font-semibold text-sm">
+                  {user.name.charAt(0).toUpperCase()}
+                </div>
+                <div className="text-left min-w-0 hidden lg:block">
+                  <p className="text-sm font-medium leading-tight truncate max-w-[120px]">{user.name}</p>
+                  <p className="text-xs text-muted-foreground capitalize leading-tight">{user.role}</p>
+                </div>
+              </button>
+              <div className="absolute right-0 top-full mt-1.5 w-48 rounded-xl border bg-background p-1.5 shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 translate-y-0 group-hover:translate-y-1">
+                <Link
+                  href="/dashboard"
+                  className="flex items-center gap-2.5 px-3 py-2.5 text-sm rounded-lg hover:bg-primary/10 hover:text-primary transition-colors"
+                >
+                  <LayoutDashboard className="h-4 w-4" />
+                  Dashboard
+                </Link>
+                <hr className="my-1" />
+                <button
+                  onClick={logout}
+                  className="flex w-full items-center gap-2.5 px-3 py-2.5 text-sm rounded-lg hover:bg-destructive/10 text-destructive transition-colors"
+                >
+                  <LogOut className="h-4 w-4" />
+                  Logout
+                </button>
+              </div>
+            </div>
           ) : (
             <>
               <Link href="/login">
@@ -78,7 +93,7 @@ export function Navbar() {
 
       {open && (
         <div className="md:hidden border-t bg-background p-4 space-y-3">
-          {items.map((item) => (
+          {navItems.map((item) => (
             <Link
               key={item.href}
               href={item.href}
@@ -90,9 +105,18 @@ export function Navbar() {
           ))}
           <div className="pt-3 border-t space-y-2">
             {isLoggedIn ? (
-              <Button variant="outline" size="sm" className="w-full" onClick={logout}>
-                Logout
-              </Button>
+              <>
+                <Link href="/dashboard" onClick={() => setOpen(false)}>
+                  <Button variant="ghost" size="sm" className="w-full justify-start gap-2">
+                    <LayoutDashboard className="h-4 w-4" />
+                    Dashboard
+                  </Button>
+                </Link>
+                <Button variant="outline" size="sm" className="w-full gap-2" onClick={logout}>
+                  <LogOut className="h-4 w-4" />
+                  Logout
+                </Button>
+              </>
             ) : (
               <>
                 <Link href="/login" onClick={() => setOpen(false)}>
