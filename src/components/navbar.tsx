@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { Menu, X, Calendar, LayoutDashboard, LogOut } from "lucide-react";
+import { Menu, X, Calendar, LayoutDashboard, LogOut, Settings } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/components/providers";
 
@@ -58,6 +58,13 @@ export function Navbar() {
                   <LayoutDashboard className="h-4 w-4" />
                   Dashboard
                 </Link>
+                <Link
+                  href="/settings"
+                  className="flex items-center gap-2.5 px-3 py-2.5 text-sm rounded-lg hover:bg-primary/10 hover:text-primary transition-colors"
+                >
+                  <Settings className="h-4 w-4" />
+                  Settings
+                </Link>
                 <hr className="my-1" />
                 <button
                   onClick={logout}
@@ -110,6 +117,12 @@ export function Navbar() {
                   <Button variant="ghost" size="sm" className="w-full justify-start gap-2">
                     <LayoutDashboard className="h-4 w-4" />
                     Dashboard
+                  </Button>
+                </Link>
+                <Link href="/settings" onClick={() => setOpen(false)}>
+                  <Button variant="ghost" size="sm" className="w-full justify-start gap-2">
+                    <Settings className="h-4 w-4" />
+                    Settings
                   </Button>
                 </Link>
                 <Button variant="outline" size="sm" className="w-full gap-2" onClick={logout}>

@@ -4,6 +4,8 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Search, SlidersHorizontal, X, ChevronDown, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { apiClient } from "@/lib/api";
+import Link from "next/link";
 
 const categories = [
   "All", "Music", "Education", "Business", "Health",
@@ -18,31 +20,27 @@ const sortOptions = [
   { label: "Price: High to Low", value: "price_desc" },
 ];
 
-const allEvents = Array.from({ length: 48 }, (_, i) => ({
-  id: i + 1,
-  title: ([
-    "Tech Innovation Summit", "Summer Music Festival", "Startup Networking Night",
-    "Art & Design Workshop", "Health & Wellness Expo", "Food Truck Festival",
-    "Gaming Tournament 2024", "Photography Masterclass", "Charity Gala Dinner",
-    "Yoga Retreat Weekend", "AI Conference 2024", "Wine Tasting Experience",
-    "Comedy Night Live", "Marathon 2024", "Cooking Class with Chef",
-    "Book Club Meeting", "Dance Workshop", "Film Screening Night",
-    "Entrepreneurship Bootcamp", "Meditation Session", "Hackathon 2024",
-    "Fashion Show", "Pet Adoption Event", "Science Fair",
-    "Blockchain Summit", "Jazz Night", "Startup Pitch Day", "Fitness Bootcamp",
-    "Wine & Paint Night", "Robotics Workshop", "Poetry Slam", "Coding Bootcamp",
-    "Farmers Market", "Stand-up Special", "Data Science Conf", "Board Game Night",
-    "Photography Walk", "Vegan Cooking Class", "Career Fair", "Open Mic Night",
-    "Design Thinking Workshop", "Film Festival", "Brewery Tour", "Yoga in the Park",
-    "Cybersecurity Summit", "Pottery Class", "Wine Club Meeting", "Dance Battle",
-  ])[i],
-  category: categories[Math.floor(Math.random() * (categories.length - 1)) + 1],
-  date: new Date(2024, Math.floor(Math.random() * 12), Math.floor(Math.random() * 28) + 1).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }),
-  location: (["San Francisco, CA", "New York, NY", "Austin, TX", "Chicago, IL", "Miami, FL", "Seattle, WA", "Denver, CO", "Portland, OR"])[Math.floor(Math.random() * 8)],
-  price: Math.random() > 0.5 ? Math.floor(Math.random() * 200) + 10 : 0,
-  attendees: Math.floor(Math.random() * 1000) + 50,
-  image: `bg-gradient-to-br from-${["blue", "pink", "emerald", "amber", "purple", "cyan"][Math.floor(Math.random() * 6)]}-500 to-${["purple", "rose", "teal", "orange", "indigo", "blue"][Math.floor(Math.random() * 6)]}-600`,
-}));
+interface EventItem {
+  _id: string;
+  title: string;
+  category: string;
+  date: string;
+  location: string;
+  price: number;
+  views: number;
+  images: string[];
+  attendees?: number; // fallback if needed
+  capacity: number;
+}
+
+interface EventsResponse {
+  success: boolean;
+  data: EventItem[];
+  page: number;
+  limit: number;
+  total: number;
+  totalPages: number;
+}
 
 function useDebounce<T>(value: T, delay: number): T {
   const [debounced, setDebounced] = useState(value);
@@ -63,7 +61,12 @@ export function EventsPage() {
   const [sort, setSort] = useState(searchParams.get("sort") || "newest");
   const [location, setLocation] = useState(searchParams.get("location") || "");
   const [showFilters, setShowFilters] = useState(false);
-  const [visibleCount, setVisibleCount] = useState(12);
+  
+  const [events, setEvents] = useState<EventItem[]>([]);
+  const [totalEvents, setTotalEvents] = useState(0);
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
 
   const debouncedSearch = useDebounce(search, 300);
@@ -82,42 +85,58 @@ export function EventsPage() {
     updateURL({ search: debouncedSearch, category, sort, location });
   }, [debouncedSearch, category, sort, location, updateURL]);
 
-  let filtered = allEvents.filter((e) => {
-    if (debouncedSearch && !e.title.toLowerCase().includes(debouncedSearch.toLowerCase())) return false;
-    if (category !== "All" && e.category !== category) return false;
-    if (location && !e.location.toLowerCase().includes(location.toLowerCase())) return false;
-    return true;
-  });
+  const fetchEvents = useCallback(async (isLoadMore = false) => {
+    try {
+      if (isLoadMore) setLoadingMore(true);
+      else setLoading(true);
 
-  if (sort === "oldest") filtered = [...filtered].reverse();
-  else if (sort === "popular") filtered = [...filtered].sort((a, b) => b.attendees - a.attendees);
-  else if (sort === "price_asc") filtered = [...filtered].sort((a, b) => a.price - b.price);
-  else if (sort === "price_desc") filtered = [...filtered].sort((a, b) => b.price - a.price);
+      const currentPage = isLoadMore ? page + 1 : 1;
+      
+      const params = new URLSearchParams();
+      if (debouncedSearch) params.set("search", debouncedSearch);
+      if (category !== "All") params.set("category", category);
+      if (sort) params.set("sort", sort);
+      if (location) params.set("location", location);
+      params.set("page", currentPage.toString());
+      params.set("limit", ITEMS_PER_PAGE.toString());
 
-  const visibleEvents = filtered.slice(0, visibleCount);
-  const hasMore = visibleCount < filtered.length;
+      const res = await apiClient<EventsResponse>(`/events?${params.toString()}`);
+      
+      if (isLoadMore) {
+        setEvents(prev => [...prev, ...res.data]);
+        setPage(currentPage);
+      } else {
+        setEvents(res.data);
+        setPage(1);
+      }
+      
+      setTotalEvents(res.total);
+      setHasMore(currentPage < res.totalPages);
+    } catch (error) {
+      console.error("Failed to fetch events:", error);
+    } finally {
+      setLoading(false);
+      setLoadingMore(false);
+    }
+  }, [debouncedSearch, category, sort, location, page]);
 
   useEffect(() => {
-    setVisibleCount(ITEMS_PER_PAGE);
-  }, [debouncedSearch, category, sort, location]);
+    fetchEvents(false);
+  }, [debouncedSearch, category, sort, location, fetchEvents]); // trigger on filter change
 
   useEffect(() => {
-    if (!loaderRef.current || !hasMore) return;
+    if (!loaderRef.current || !hasMore || loadingMore) return;
     const observer = new IntersectionObserver(
       (entries) => {
         if (entries[0].isIntersecting && !loadingMore) {
-          setLoadingMore(true);
-          setTimeout(() => {
-            setVisibleCount((prev) => prev + ITEMS_PER_PAGE);
-            setLoadingMore(false);
-          }, 600);
+          fetchEvents(true);
         }
       },
       { threshold: 0.1 }
     );
     observer.observe(loaderRef.current);
     return () => observer.disconnect();
-  }, [hasMore, loadingMore]);
+  }, [hasMore, loadingMore, fetchEvents]);
 
   const clearFilters = () => {
     setSearch("");
@@ -147,7 +166,7 @@ export function EventsPage() {
               type="text"
               placeholder="Search events..."
               value={search}
-              onChange={(e) => { setSearch(e.target.value); setVisibleCount(ITEMS_PER_PAGE); }}
+              onChange={(e) => setSearch(e.target.value)}
               className="w-full rounded-lg border border-input bg-background pl-10 pr-4 py-2.5 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             />
           </div>
@@ -200,7 +219,7 @@ export function EventsPage() {
                 {categories.map((c) => (
                   <button
                     key={c}
-                    onClick={() => { setCategory(c); setVisibleCount(ITEMS_PER_PAGE); }}
+                    onClick={() => setCategory(c)}
                     className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${
                       category === c
                         ? "bg-primary text-primary-foreground border-primary"
@@ -219,7 +238,7 @@ export function EventsPage() {
                 type="text"
                 placeholder="City or region..."
                 value={location}
-                onChange={(e) => { setLocation(e.target.value); setVisibleCount(ITEMS_PER_PAGE); }}
+                onChange={(e) => setLocation(e.target.value)}
                 className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               />
             </div>
@@ -246,7 +265,13 @@ export function EventsPage() {
           </aside>
 
           <div className="flex-1">
-            {visibleEvents.length === 0 ? (
+            {loading ? (
+               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 animate-pulse">
+                {Array.from({ length: 8 }).map((_, i) => (
+                  <div key={i} className="h-52 bg-muted rounded-xl" />
+                ))}
+               </div>
+            ) : events.length === 0 ? (
               <div className="text-center py-20">
                 <div className="text-6xl mb-4">🔍</div>
                 <h3 className="text-xl font-semibold mb-2">No events found</h3>
@@ -256,34 +281,48 @@ export function EventsPage() {
             ) : (
               <>
                 <div className="text-sm text-muted-foreground mb-4">
-                  Showing {visibleEvents.length} of {filtered.length} events
+                  Showing {events.length} of {totalEvents} events
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                  {visibleEvents.map((event) => (
-                    <div
-                      key={event.id}
-                      className="group rounded-xl border bg-background overflow-hidden hover:shadow-lg transition-shadow cursor-pointer"
-                    >
-                      <div className={`h-32 ${event.image} flex items-center justify-center`}>
-                        <span className="px-3 py-1 rounded-full bg-background/80 backdrop-blur-sm text-xs font-medium">
-                          {event.category}
-                        </span>
-                      </div>
-                      <div className="p-3 space-y-2">
-                        <h3 className="font-semibold text-sm line-clamp-2 group-hover:text-primary transition-colors">
-                          {event.title}
-                        </h3>
-                        <div className="text-xs text-muted-foreground">
-                          {event.date} &middot; {event.location}
+                  {events.map((event) => (
+                    <Link href={`/events/${event._id}`} key={event._id}>
+                      <div className="group h-full rounded-xl border bg-background overflow-hidden hover:shadow-lg transition-shadow cursor-pointer">
+                        {event.images && event.images.length > 0 ? (
+                          <div className="relative h-40 overflow-hidden">
+                            <div
+                              className="absolute inset-0 bg-cover bg-center transition-transform duration-300 group-hover:scale-110"
+                              style={{ backgroundImage: `url(${event.images[0]})` }}
+                            />
+                            <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent" />
+                            <div className="relative h-full flex items-start justify-end p-3">
+                              <span className="px-3 py-1 rounded-full bg-background/90 backdrop-blur-sm text-xs font-medium shadow-sm">
+                                {event.category}
+                              </span>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="h-40 bg-gradient-to-br from-blue-500 to-purple-600 flex items-start justify-end p-3">
+                            <span className="px-3 py-1 rounded-full bg-background/90 backdrop-blur-sm text-xs font-medium shadow-sm">
+                              {event.category}
+                            </span>
+                          </div>
+                        )}
+                        <div className="p-3 space-y-2">
+                          <h3 className="font-semibold text-sm line-clamp-2 group-hover:text-primary transition-colors">
+                            {event.title}
+                          </h3>
+                          <div className="text-xs text-muted-foreground">
+                            {new Date(event.date).toLocaleDateString()} &middot; {event.location}
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs text-muted-foreground">{event.views || 0} views</span>
+                            <span className="text-xs font-semibold">
+                              {event.price === 0 ? "Free" : `$${event.price}`}
+                            </span>
+                          </div>
                         </div>
-                        <div className="flex items-center justify-between">
-                          <span className="text-xs text-muted-foreground">{event.attendees} attending</span>
-                          <span className="text-xs font-semibold">
-                            {event.price === 0 ? "Free" : `$${event.price}`}
-                          </span>
-                        </div>
                       </div>
-                    </div>
+                    </Link>
                   ))}
                 </div>
 

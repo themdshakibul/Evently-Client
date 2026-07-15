@@ -18,8 +18,16 @@ export interface Event {
   capacity: number;
   price: number;
   organizer: string | { _id: string; name: string; email: string; avatar?: string };
-  status: "draft" | "published" | "cancelled";
+  status: "draft" | "pending" | "published" | "cancelled";
   views: number;
+  attendeesCount: number;
+  createdAt: string;
+}
+
+export interface Registration {
+  _id: string;
+  event: string | Event;
+  user: string | User;
   createdAt: string;
 }
 

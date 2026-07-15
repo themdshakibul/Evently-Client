@@ -4,6 +4,7 @@ interface ApiOptions {
   method?: string;
   body?: unknown;
   headers?: Record<string, string>;
+  _retry?: boolean;
 }
 
 export class ApiError extends Error {
@@ -17,8 +18,16 @@ export class ApiError extends Error {
   }
 }
 
+let isRefreshing = false;
+let refreshSubscribers: ((error: Error | null) => void)[] = [];
+
+function onRefreshed(error: Error | null) {
+  refreshSubscribers.forEach((callback) => callback(error));
+  refreshSubscribers = [];
+}
+
 export async function apiClient<T = unknown>(endpoint: string, options: ApiOptions = {}): Promise<T> {
-  const { method = "GET", body, headers = {} } = options;
+  const { method = "GET", body, headers = {}, _retry = false } = options;
 
   const res = await fetch(`${BASE_URL}${endpoint}`, {
     method,
@@ -30,19 +39,51 @@ export async function apiClient<T = unknown>(endpoint: string, options: ApiOptio
     body: body ? JSON.stringify(body) : undefined,
   });
 
-  const data = await res.json();
+  const data = await res.json().catch(() => ({}));
 
   if (!res.ok) {
-    if (res.status === 401 && typeof window !== "undefined") {
+    if (res.status === 401 && !_retry && typeof window !== "undefined") {
+      if (isRefreshing) {
+        return new Promise<T>((resolve, reject) => {
+          refreshSubscribers.push((err) => {
+            if (err) return reject(err);
+            resolve(apiClient<T>(endpoint, { ...options, _retry: true }));
+          });
+        });
+      }
+
+      isRefreshing = true;
+      try {
+        const refreshRes = await fetch(`${BASE_URL}/auth/refresh`, { method: "POST", credentials: "include" });
+        if (refreshRes.ok) {
+          isRefreshing = false;
+          onRefreshed(null);
+          return apiClient<T>(endpoint, { ...options, _retry: true });
+        } else {
+          throw new Error("Refresh failed");
+        }
+      } catch (err) {
+        isRefreshing = false;
+        onRefreshed(err as Error);
+        const pathname = window.location.pathname;
+        if (pathname !== "/login" && pathname !== "/register") {
+          window.location.href = "/login";
+        }
+        throw new ApiError("Session expired", 401);
+      }
+    }
+    
+    if (res.status === 401 && _retry && typeof window !== "undefined") {
       const pathname = window.location.pathname;
       if (pathname !== "/login" && pathname !== "/register") {
         window.location.href = "/login";
       }
     }
+
     throw new ApiError(data.error || "Something went wrong", res.status, data.errors);
   }
 
-  return data;
+  return data as T;
 }
 
 export async function apiUpload<T = unknown>(endpoint: string, formData: FormData): Promise<T> {

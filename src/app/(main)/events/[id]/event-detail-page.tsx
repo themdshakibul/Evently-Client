@@ -2,71 +2,90 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { useParams } from "next/navigation";
 import {
   Calendar,
   MapPin,
   User,
-  Clock,
   Share2,
   Bookmark,
   Ticket,
   ChevronLeft,
   Star,
+  Loader2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useEvent, useRelatedEvents } from "@/hooks/useEvents";
+import { useRegisterForEvent, useCancelRegistration, useMyRegistrations } from "@/hooks/useRegistrations";
+import { useAuth } from "@/components/providers";
+import { toast } from "sonner";
 
 const tabs = ["Overview", "Gallery", "Reviews", "Similar Events"] as const;
 
-const event = {
-  id: "1",
-  title: "Tech Innovation Summit 2024",
-  category: "Business",
-  date: "December 15, 2024",
-  time: "9:00 AM - 6:00 PM",
-  location: "Moscone Center, San Francisco, CA",
-  organizer: "TechEvents Inc.",
-  organizerAvatar: "TE",
-  price: 149,
-  capacity: 1200,
-  attendees: 892,
-  image: "bg-gradient-to-br from-blue-500 to-purple-600",
-  description: `Join us for the largest technology innovation summit of the year. This full-day event brings together industry leaders, startups, and technology enthusiasts to explore the latest trends shaping our digital future.
-
-What to expect:
-- Keynote speeches from Fortune 500 CTOs
-- Hands-on workshops on AI, Cloud, and Cybersecurity
-- Networking sessions with industry professionals
-- Startup showcase and pitch competition
-- Panel discussions on emerging technologies
-
-Whether you're a seasoned professional or just starting your tech journey, the Tech Innovation Summit offers invaluable insights and connections that will accelerate your career and business growth.`,
-  gallery: [
-    "bg-gradient-to-br from-blue-400 to-indigo-500",
-    "bg-gradient-to-br from-purple-400 to-pink-500",
-    "bg-gradient-to-br from-cyan-400 to-teal-500",
-    "bg-gradient-to-br from-rose-400 to-orange-500",
-  ],
-};
-
-const similarEvents = [
-  { id: "2", title: "AI Conference 2024", date: "Jan 20, 2025", category: "Business", image: "bg-gradient-to-br from-purple-500 to-indigo-600", price: 199 },
-  { id: "3", title: "Startup Networking Night", date: "Jul 25, 2024", category: "Business", image: "bg-gradient-to-br from-emerald-500 to-teal-600", price: 25 },
-  { id: "4", title: "Entrepreneurship Bootcamp", date: "Aug 10, 2024", category: "Education", image: "bg-gradient-to-br from-amber-500 to-orange-600", price: 0 },
-];
-
-const reviews = [
-  { name: "Alex M.", rating: 5, comment: "Amazing event! The speakers were world-class and the networking opportunities were incredible.", date: "Dec 16, 2024" },
-  { name: "Jessica L.", rating: 4, comment: "Very well organized. Would have liked more breakout sessions, but overall a great experience.", date: "Dec 15, 2024" },
-  { name: "Ryan T.", rating: 5, comment: "Best tech conference I've attended this year. The AI workshop was particularly insightful.", date: "Dec 15, 2024" },
-];
-
 export function EventDetailPage() {
+  const { id } = useParams<{ id: string }>();
+  const { user } = useAuth();
+  const { data: eventData, isLoading } = useEvent(id);
+  const { data: relatedData } = useRelatedEvents(id);
+  const { data: myRegsData } = useMyRegistrations(!!user);
+  const registerMutation = useRegisterForEvent();
+  const cancelMutation = useCancelRegistration();
+
   const [activeTab, setActiveTab] = useState<(typeof tabs)[number]>("Overview");
-  const [registered, setRegistered] = useState(false);
+
+  const event = eventData?.data;
+  const related = relatedData?.data || [];
+  const myRegs = myRegsData?.data || [];
+  const isRegistered = myRegs.some((r) => (typeof r.event === "string" ? r.event === id : r.event._id === id));
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  if (!event) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center gap-4">
+        <p className="text-lg font-medium">Event not found</p>
+        <Link href="/events">
+          <Button variant="outline">Back to events</Button>
+        </Link>
+      </div>
+    );
+  }
+
+  const handleRegister = async () => {
+    try {
+      await registerMutation.mutateAsync(id);
+      toast.success("Successfully registered for this event!");
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Failed to register";
+      toast.error(msg);
+    }
+  };
+
+  const handleCancel = async () => {
+    try {
+      await cancelMutation.mutateAsync(id);
+      toast.success("Registration cancelled");
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Failed to cancel registration";
+      toast.error(msg);
+    }
+  };
+
+  const organizerName = typeof event.organizer === "object" ? event.organizer.name : "Organizer";
+  const organizerInitial = typeof event.organizer === "object" ? event.organizer.name.charAt(0).toUpperCase() : "O";
 
   return (
     <div className="min-h-screen">
-      <div className={`h-64 sm:h-80 ${event.image} relative flex items-end`}>
+      <div className={`h-64 sm:h-80 ${event.images.length > 0 ? "" : "bg-gradient-to-br from-blue-500 to-purple-600"} relative flex items-end`}>
+        {event.images.length > 0 ? (
+          <div className="absolute inset-0 bg-cover bg-center" style={{ backgroundImage: `url(${event.images[0]})` }} />
+        ) : null}
         <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
         <div className="relative z-10 container mx-auto px-4 pb-8">
           <Link href="/events" className="inline-flex items-center gap-1 text-white/80 hover:text-white text-sm mb-3">
@@ -77,15 +96,11 @@ export function EventDetailPage() {
           <div className="flex flex-wrap gap-4 mt-3 text-white/80 text-sm">
             <span className="flex items-center gap-1.5">
               <Calendar className="h-4 w-4" />
-              {event.date}
+              {new Date(event.date).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}
             </span>
             <span className="flex items-center gap-1.5">
               <MapPin className="h-4 w-4" />
               {event.location}
-            </span>
-            <span className="flex items-center gap-1.5">
-              <User className="h-4 w-4" />
-              {event.organizer}
             </span>
           </div>
         </div>
@@ -117,11 +132,9 @@ export function EventDetailPage() {
                     <div className="flex flex-wrap gap-4">
                       <div className="rounded-lg border px-4 py-3 text-center min-w-[100px]">
                         <div className="text-xs text-muted-foreground">Date</div>
-                        <div className="font-semibold text-sm mt-1">{event.date}</div>
-                      </div>
-                      <div className="rounded-lg border px-4 py-3 text-center min-w-[100px]">
-                        <div className="text-xs text-muted-foreground">Time</div>
-                        <div className="font-semibold text-sm mt-1">{event.time}</div>
+                        <div className="font-semibold text-sm mt-1">
+                          {new Date(event.date).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                        </div>
                       </div>
                       <div className="rounded-lg border px-4 py-3 text-center min-w-[100px]">
                         <div className="text-xs text-muted-foreground">Price</div>
@@ -129,7 +142,7 @@ export function EventDetailPage() {
                       </div>
                       <div className="rounded-lg border px-4 py-3 text-center min-w-[100px]">
                         <div className="text-xs text-muted-foreground">Capacity</div>
-                        <div className="font-semibold text-sm mt-1">{event.attendees}/{event.capacity}</div>
+                        <div className="font-semibold text-sm mt-1">{event.attendeesCount}/{event.capacity}</div>
                       </div>
                     </div>
                     <div>
@@ -143,9 +156,15 @@ export function EventDetailPage() {
 
                 {activeTab === "Gallery" && (
                   <div className="grid grid-cols-2 gap-4">
-                    {event.gallery.map((gradient, i) => (
-                      <div key={i} className={`h-48 rounded-xl ${gradient}`} />
-                    ))}
+                    {event.images.length === 0 ? (
+                      <p className="text-sm text-muted-foreground col-span-2 text-center py-8">No images available</p>
+                    ) : (
+                      event.images.map((img, i) => (
+                        <div key={i} className="h-48 rounded-xl bg-muted overflow-hidden">
+                          <img src={img} alt={`${event.title} ${i + 1}`} className="w-full h-full object-cover" />
+                        </div>
+                      ))
+                    )}
                   </div>
                 )}
 
@@ -156,37 +175,30 @@ export function EventDetailPage() {
                         <Star className="h-5 w-5 fill-primary text-primary" />
                         <span className="font-semibold">4.7</span>
                       </div>
-                      <span className="text-sm text-muted-foreground">({reviews.length} reviews)</span>
+                      <span className="text-sm text-muted-foreground">(3 reviews)</span>
                     </div>
-                    {reviews.map((r, i) => (
-                      <div key={i} className="rounded-lg border p-4">
-                        <div className="flex items-center justify-between mb-2">
-                          <span className="font-semibold text-sm">{r.name}</span>
-                          <span className="text-xs text-muted-foreground">{r.date}</span>
-                        </div>
-                        <div className="flex gap-0.5 mb-2">
-                          {Array.from({ length: 5 }).map((_, j) => (
-                            <Star key={j} className={`h-3.5 w-3.5 ${j < r.rating ? "fill-primary text-primary" : "text-muted"}`} />
-                          ))}
-                        </div>
-                        <p className="text-sm text-muted-foreground">{r.comment}</p>
-                      </div>
-                    ))}
+                    <div className="text-sm text-muted-foreground text-center py-8">Reviews coming soon</div>
                   </div>
                 )}
 
                 {activeTab === "Similar Events" && (
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {similarEvents.map((e) => (
-                      <Link key={e.id} href={`/events/${e.id}`} className="group rounded-lg border overflow-hidden hover:shadow-md transition-shadow">
-                        <div className={`h-24 ${e.image}`} />
-                        <div className="p-3 space-y-1">
-                          <div className="text-xs text-muted-foreground">{e.date}</div>
-                          <h4 className="font-semibold text-sm group-hover:text-primary transition-colors">{e.title}</h4>
-                          <div className="text-xs font-medium">{e.price === 0 ? "Free" : `$${e.price}`}</div>
-                        </div>
-                      </Link>
-                    ))}
+                    {related.length === 0 ? (
+                      <p className="text-sm text-muted-foreground col-span-full text-center py-8">No similar events found</p>
+                    ) : (
+                      related.map((e) => (
+                        <Link key={e._id} href={`/events/${e._id}`} className="group rounded-lg border overflow-hidden hover:shadow-md transition-shadow">
+                          <div className={`h-24 ${e.images?.length > 0 ? "bg-cover bg-center" : "bg-gradient-to-br from-primary/20 to-primary/10"}`} style={e.images?.length > 0 ? { backgroundImage: `url(${e.images[0]})` } : {}} />
+                          <div className="p-3 space-y-1">
+                            <div className="text-xs text-muted-foreground">
+                              {new Date(e.date).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                            </div>
+                            <h4 className="font-semibold text-sm group-hover:text-primary transition-colors">{e.title}</h4>
+                            <div className="text-xs font-medium">{e.price === 0 ? "Free" : `$${e.price}`}</div>
+                          </div>
+                        </Link>
+                      ))
+                    )}
                   </div>
                 )}
               </div>
@@ -202,14 +214,45 @@ export function EventDetailPage() {
                 <div className="text-sm text-muted-foreground mt-1">per person</div>
               </div>
 
-              <Button
-                className="w-full gap-2"
-                size="lg"
-                onClick={() => setRegistered(!registered)}
-              >
-                <Ticket className="h-4 w-4" />
-                {registered ? "Registered!" : "Register Now"}
-              </Button>
+              {user ? (
+                isRegistered ? (
+                  <Button
+                    className="w-full gap-2"
+                    size="lg"
+                    variant="outline"
+                    onClick={handleCancel}
+                    disabled={cancelMutation.isPending}
+                  >
+                    {cancelMutation.isPending ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Ticket className="h-4 w-4" />
+                    )}
+                    {cancelMutation.isPending ? "Cancelling..." : "Registered!"}
+                  </Button>
+                ) : (
+                  <Button
+                    className="w-full gap-2"
+                    size="lg"
+                    onClick={handleRegister}
+                    disabled={registerMutation.isPending}
+                  >
+                    {registerMutation.isPending ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Ticket className="h-4 w-4" />
+                    )}
+                    {registerMutation.isPending ? "Registering..." : "Register Now"}
+                  </Button>
+                )
+              ) : (
+                <Link href="/login">
+                  <Button className="w-full gap-2" size="lg">
+                    <Ticket className="h-4 w-4" />
+                    Login to Register
+                  </Button>
+                </Link>
+              )}
 
               <div className="flex gap-2">
                 <Button variant="outline" size="sm" className="flex-1 gap-2">
@@ -225,16 +268,16 @@ export function EventDetailPage() {
               <div className="border-t pt-4 space-y-3">
                 <div className="flex items-center gap-3">
                   <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center text-sm font-semibold text-primary">
-                    {event.organizerAvatar}
+                    {organizerInitial}
                   </div>
                   <div>
-                    <div className="text-sm font-semibold">{event.organizer}</div>
+                    <div className="text-sm font-semibold">{organizerName}</div>
                     <div className="text-xs text-muted-foreground">Organizer</div>
                   </div>
                 </div>
                 <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <Clock className="h-4 w-4" />
-                  Event starts in 5 months
+                  <User className="h-4 w-4" />
+                  {event.attendeesCount} / {event.capacity} registered
                 </div>
               </div>
             </div>
