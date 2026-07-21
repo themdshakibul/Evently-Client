@@ -45,12 +45,12 @@ export function FeaturedEvents() {
 
   return (
     <section className="py-20 px-4">
-      <div className="container mx-auto max-w-6xl">
+      <div className="container mx-auto">
         <SectionHeader
           title="Featured Events"
           description="Hand-picked events you don't want to miss."
         />
-        
+
         {loading ? (
           <div className="flex justify-center items-center py-20">
             <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />

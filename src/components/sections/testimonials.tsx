@@ -39,7 +39,7 @@ const testimonials = [
 export function Testimonials() {
   return (
     <section className="py-20 px-4">
-      <div className="container mx-auto max-w-6xl">
+      <div className="container mx-auto">
         <SectionHeader
           title="What Our Users Say"
           description="Join thousands of satisfied users who trust Evently."

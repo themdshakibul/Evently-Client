@@ -2,6 +2,7 @@
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useState, createContext, useContext, useEffect, type ReactNode } from "react";
+import { ThemeProvider } from "next-themes";
 import { apiClient } from "@/lib/api";
 
 interface User {
@@ -100,7 +101,9 @@ export function Providers({ children }: { children: ReactNode }) {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <AuthProvider>{children}</AuthProvider>
+      <ThemeProvider attribute="class" defaultTheme="light" enableSystem disableTransitionOnChange>
+        <AuthProvider>{children}</AuthProvider>
+      </ThemeProvider>
     </QueryClientProvider>
   );
 }

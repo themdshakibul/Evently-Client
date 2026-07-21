@@ -27,7 +27,7 @@ const features = [
 export function Features() {
   return (
     <section className="py-20 px-4">
-      <div className="container mx-auto max-w-6xl">
+      <div className="container mx-auto">
         <SectionHeader
           title="Everything you need"
           description="Powerful features to help you create, discover, and manage events seamlessly."

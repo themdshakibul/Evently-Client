@@ -25,7 +25,7 @@ const categories = [
 export function Categories() {
   return (
     <section className="py-20 px-4 bg-muted/30">
-      <div className="container mx-auto max-w-6xl">
+      <div className="container mx-auto">
         <SectionHeader
           title="Browse by Category"
           description="Find the perfect event from a wide range of categories."

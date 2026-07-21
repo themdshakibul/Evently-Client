@@ -40,7 +40,7 @@ const posts = [
 export function Blog() {
   return (
     <section className="py-20 px-4 bg-muted/30">
-      <div className="container mx-auto max-w-6xl">
+      <div className="container mx-auto">
         <SectionHeader
           title="Latest from Our Blog"
           description="Insights, tips, and guides for event organizers and attendees."

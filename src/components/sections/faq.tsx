@@ -36,7 +36,7 @@ export function FAQ() {
 
   return (
     <section className="py-20 px-4">
-      <div className="container mx-auto max-w-3xl">
+      <div className="container mx-auto">
         <SectionHeader
           title="Frequently Asked Questions"
           description="Got questions? We've got answers."
@@ -50,9 +50,8 @@ export function FAQ() {
               >
                 {faq.q}
                 <ChevronDown
-                  className={`h-4 w-4 shrink-0 transition-transform ${
-                    openIndex === i ? "rotate-180" : ""
-                  }`}
+                  className={`h-4 w-4 shrink-0 transition-transform ${openIndex === i ? "rotate-180" : ""
+                    }`}
                 />
               </button>
               {openIndex === i && (
