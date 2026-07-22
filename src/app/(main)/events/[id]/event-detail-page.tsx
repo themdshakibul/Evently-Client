@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import {
   Calendar,
   MapPin,
@@ -29,7 +29,7 @@ export function EventDetailPage() {
 
 function EventDetailContent() {
   const { id } = useParams<{ id: string }>();
-  const { user } = useAuth();
+  const { user, loading } = useAuth();
   const { data: eventData, isLoading } = useEvent(id);
   const { data: relatedData } = useRelatedEvents(id);
   const { data: myRegsData } = useMyRegistrations(!!user);
@@ -40,6 +40,13 @@ function EventDetailContent() {
   const unsaveMutation = useUnsaveEvent();
 
   const [activeTab, setActiveTab] = useState<(typeof tabs)[number]>("Overview");
+  const router = useRouter();
+
+  useEffect(() => {
+    if (!loading && !user) {
+      router.push("/login");
+    }
+  }, [user, loading, router]);
 
   const event = eventData?.data;
   const related = relatedData?.data || [];
@@ -48,12 +55,16 @@ function EventDetailContent() {
   const isRegistered = myRegs.some((r) => (typeof r.event === "string" ? r.event === id : r.event._id === id));
   const isSaved = savedEvents.some((e) => e && e._id === id);
 
-  if (isLoading) {
+  if (loading || isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
       </div>
     );
+  }
+
+  if (!user) {
+    return null; // Will redirect in useEffect
   }
 
   if (!event) {
