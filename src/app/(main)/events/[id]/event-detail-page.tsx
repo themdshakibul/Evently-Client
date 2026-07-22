@@ -15,6 +15,7 @@ import {
   Loader2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { ProtectedRoute } from "@/components/protected-route";
 import { useEvent, useRelatedEvents } from "@/hooks/useEvents";
 import { useRegisterForEvent, useCancelRegistration, useMyRegistrations } from "@/hooks/useRegistrations";
 import { useAuth } from "@/components/providers";
@@ -23,6 +24,14 @@ import { toast } from "sonner";
 const tabs = ["Overview", "Gallery", "Reviews", "Similar Events"] as const;
 
 export function EventDetailPage() {
+  return (
+    <ProtectedRoute>
+      <EventDetailContent />
+    </ProtectedRoute>
+  );
+}
+
+function EventDetailContent() {
   const { id } = useParams<{ id: string }>();
   const { user } = useAuth();
   const { data: eventData, isLoading } = useEvent(id);

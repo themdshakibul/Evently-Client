@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Search, SlidersHorizontal, X, ChevronDown, Loader2 } from "lucide-react";
+import { Search, SlidersHorizontal, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { apiClient } from "@/lib/api";
 import Link from "next/link";
@@ -54,7 +54,6 @@ function useDebounce<T>(value: T, delay: number): T {
 export function EventsPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const loaderRef = useRef<HTMLDivElement>(null);
 
   const [search, setSearch] = useState(searchParams.get("search") || "");
   const [category, setCategory] = useState(searchParams.get("category") || "All");
@@ -65,9 +64,8 @@ export function EventsPage() {
   const [events, setEvents] = useState<EventItem[]>([]);
   const [totalEvents, setTotalEvents] = useState(0);
   const [page, setPage] = useState(1);
-  const [hasMore, setHasMore] = useState(false);
+  const [totalPages, setTotalPages] = useState(1);
   const [loading, setLoading] = useState(true);
-  const [loadingMore, setLoadingMore] = useState(false);
 
   const debouncedSearch = useDebounce(search, 300);
   const ITEMS_PER_PAGE = 12;
@@ -85,58 +83,33 @@ export function EventsPage() {
     updateURL({ search: debouncedSearch, category, sort, location });
   }, [debouncedSearch, category, sort, location, updateURL]);
 
-  const fetchEvents = useCallback(async (isLoadMore = false) => {
+  const fetchEvents = useCallback(async (targetPage = 1) => {
+    setLoading(true);
     try {
-      if (isLoadMore) setLoadingMore(true);
-      else setLoading(true);
-
-      const currentPage = isLoadMore ? page + 1 : 1;
-      
       const params = new URLSearchParams();
       if (debouncedSearch) params.set("search", debouncedSearch);
       if (category !== "All") params.set("category", category);
       if (sort) params.set("sort", sort);
       if (location) params.set("location", location);
-      params.set("page", currentPage.toString());
+      params.set("page", targetPage.toString());
       params.set("limit", ITEMS_PER_PAGE.toString());
 
       const res = await apiClient<EventsResponse>(`/events?${params.toString()}`);
       
-      if (isLoadMore) {
-        setEvents(prev => [...prev, ...res.data]);
-        setPage(currentPage);
-      } else {
-        setEvents(res.data);
-        setPage(1);
-      }
-      
+      setEvents(res.data);
+      setPage(res.page);
+      setTotalPages(res.totalPages);
       setTotalEvents(res.total);
-      setHasMore(currentPage < res.totalPages);
     } catch (error) {
       console.error("Failed to fetch events:", error);
     } finally {
       setLoading(false);
-      setLoadingMore(false);
     }
-  }, [debouncedSearch, category, sort, location, page]);
+  }, [debouncedSearch, category, sort, location]);
 
   useEffect(() => {
-    fetchEvents(false);
+    fetchEvents(1);
   }, [debouncedSearch, category, sort, location, fetchEvents]); // trigger on filter change
-
-  useEffect(() => {
-    if (!loaderRef.current || !hasMore || loadingMore) return;
-    const observer = new IntersectionObserver(
-      (entries) => {
-        if (entries[0].isIntersecting && !loadingMore) {
-          fetchEvents(true);
-        }
-      },
-      { threshold: 0.1 }
-    );
-    observer.observe(loaderRef.current);
-    return () => observer.disconnect();
-  }, [hasMore, loadingMore, fetchEvents]);
 
   const clearFilters = () => {
     setSearch("");
@@ -326,16 +299,34 @@ export function EventsPage() {
                   ))}
                 </div>
 
-                {hasMore && (
-                  <div ref={loaderRef} className="flex items-center justify-center py-8">
-                    {loadingMore ? (
-                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                        Loading more events...
-                      </div>
-                    ) : (
-                      <ChevronDown className="h-5 w-5 text-muted-foreground animate-bounce" />
-                    )}
+                {totalPages > 1 && (
+                  <div className="flex items-center justify-center gap-2 py-8">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={page <= 1}
+                      onClick={() => fetchEvents(page - 1)}
+                    >
+                      Previous
+                    </Button>
+                    {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
+                      <Button
+                        key={p}
+                        variant={p === page ? "default" : "outline"}
+                        size="sm"
+                        onClick={() => fetchEvents(p)}
+                      >
+                        {p}
+                      </Button>
+                    ))}
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={page >= totalPages}
+                      onClick={() => fetchEvents(page + 1)}
+                    >
+                      Next
+                    </Button>
                   </div>
                 )}
               </>
