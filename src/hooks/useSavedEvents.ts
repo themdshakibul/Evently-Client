@@ -2,10 +2,11 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiClient, ApiError } from "@/lib/api";
 import type { Event } from "@/types";
 
-export function useSavedEvents() {
+export function useSavedEvents(enabled?: boolean) {
   return useQuery<{ success: boolean; data: Event[] }>({
     queryKey: ["saved-events"],
     queryFn: () => apiClient("/users/me/saved-events"),
+    enabled,
   });
 }
 

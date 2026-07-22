@@ -15,7 +15,6 @@ import {
   Loader2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { ProtectedRoute } from "@/components/protected-route";
 import { useEvent, useRelatedEvents } from "@/hooks/useEvents";
 import { useRegisterForEvent, useCancelRegistration, useMyRegistrations } from "@/hooks/useRegistrations";
 import { useSavedEvents, useSaveEvent, useUnsaveEvent } from "@/hooks/useSavedEvents";
@@ -25,11 +24,7 @@ import { toast } from "sonner";
 const tabs = ["Overview", "Gallery", "Reviews", "Similar Events"] as const;
 
 export function EventDetailPage() {
-  return (
-    <ProtectedRoute>
-      <EventDetailContent />
-    </ProtectedRoute>
-  );
+  return <EventDetailContent />;
 }
 
 function EventDetailContent() {
@@ -38,7 +33,7 @@ function EventDetailContent() {
   const { data: eventData, isLoading } = useEvent(id);
   const { data: relatedData } = useRelatedEvents(id);
   const { data: myRegsData } = useMyRegistrations(!!user);
-  const { data: savedData } = useSavedEvents();
+  const { data: savedData } = useSavedEvents(!!user);
   const registerMutation = useRegisterForEvent();
   const cancelMutation = useCancelRegistration();
   const saveMutation = useSaveEvent();
