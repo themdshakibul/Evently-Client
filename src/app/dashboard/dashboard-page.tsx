@@ -8,7 +8,8 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useAuth } from "@/components/providers";
 import { useMyEvents, useDeleteEvent, useCreateEvent } from "@/hooks/useEvents";
-import { useEventRegistrations } from "@/hooks/useRegistrations";
+import { useMyRegistrations, useEventRegistrations, useCancelRegistration } from "@/hooks/useRegistrations";
+import { useSavedEvents, useUnsaveEvent } from "@/hooks/useSavedEvents";
 import { useUpdateProfile } from "@/hooks/useUsers";
 import { useAdminStats, useAdminEvents, useAdminUsers, useAdminDeleteEvent, usePendingEvents, useApproveEvent, useRejectEvent } from "@/hooks/useAdmin";
 import { Button } from "@/components/ui/button";
@@ -37,6 +38,8 @@ import {
   Clock,
   PieChart,
   Activity,
+  Bookmark,
+  Ticket,
 } from "lucide-react";
 import { toast } from "sonner";
 import Link from "next/link";
@@ -143,7 +146,11 @@ function StatCard({
 
 function OverviewTab() {
   const { data: eventsData, isLoading } = useMyEvents();
+  const { data: regsData } = useMyRegistrations();
+  const { data: savedData } = useSavedEvents();
   const events = eventsData?.data || [];
+  const myRegs = regsData?.data || [];
+  const savedEvents = savedData?.data || [];
   const publishedCount = events.filter((e) => e.status === "published").length;
   const draftCount = events.filter((e) => e.status === "draft").length;
   const totalViews = events.reduce((sum, e) => sum + e.views, 0);
@@ -153,11 +160,13 @@ function OverviewTab() {
 
   return (
     <div className="space-y-6">
-      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-7 gap-4">
         <StatCard icon={Calendar} label="Total Events" value={events.length} />
         <StatCard icon={FileText} label="Published" value={publishedCount} />
         <StatCard icon={BarChart3} label="Drafts" value={draftCount} />
         <StatCard icon={Users} label="Registrations" value={totalRegistrations.toLocaleString()} />
+        <StatCard icon={Ticket} label="My Registered" value={myRegs.length} />
+        <StatCard icon={Bookmark} label="Saved Events" value={savedEvents.length} />
         <StatCard icon={Eye} label="Total Views" value={totalViews.toLocaleString()} />
       </div>
 
@@ -740,6 +749,164 @@ function RegistrationsTab() {
   );
 }
 
+function MyRegisteredTab() {
+  const { data: regsData, isLoading } = useMyRegistrations();
+  const cancelMutation = useCancelRegistration();
+  const regs = regsData?.data || [];
+
+  const handleCancel = async (eventId: string) => {
+    try {
+      await cancelMutation.mutateAsync(eventId);
+      toast.success("Registration cancelled");
+    } catch {
+      toast.error("Failed to cancel registration");
+    }
+  };
+
+  if (isLoading) {
+    return (
+      <div className="rounded-xl border bg-background p-6 space-y-4">
+        {Array.from({ length: 3 }).map((_, i) => (
+          <div key={i} className="h-14 bg-muted rounded-lg animate-pulse" />
+        ))}
+      </div>
+    );
+  }
+
+  if (regs.length === 0) {
+    return (
+      <div className="rounded-xl border bg-background p-12 text-center">
+        <div className="h-16 w-16 rounded-full bg-muted flex items-center justify-center mx-auto mb-4">
+          <Ticket className="h-8 w-8 text-muted-foreground" />
+        </div>
+        <h3 className="text-xl font-semibold mb-2">No registrations yet</h3>
+        <p className="text-muted-foreground mb-6">
+          Register for events to see them here.
+        </p>
+        <Link href="/events">
+          <Button className="gap-2">
+            <Eye className="h-4 w-4" />
+            Browse Events
+          </Button>
+        </Link>
+      </div>
+    );
+  }
+
+  return (
+    <div className="grid gap-4">
+      {regs.map((reg) => {
+        const ev = typeof reg.event === "object" ? reg.event : null;
+        if (!ev) return null;
+        return (
+          <div key={reg._id} className="rounded-xl border bg-background p-5 flex items-center justify-between gap-4">
+            <div className="min-w-0 flex-1">
+              <Link href={`/events/${ev._id}`} className="font-medium text-sm hover:underline truncate block">
+                {ev.title}
+              </Link>
+              <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-muted-foreground mt-0.5">
+                <span>{new Date(ev.date).toLocaleDateString()}</span>
+                <span>{ev.location}</span>
+              </div>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-1.5 shrink-0 text-destructive hover:text-destructive"
+              onClick={() => handleCancel(ev._id)}
+              disabled={cancelMutation.isPending && cancelMutation.variables === ev._id}
+            >
+              {cancelMutation.isPending && cancelMutation.variables === ev._id ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <X className="h-3.5 w-3.5" />
+              )}
+              Cancel
+            </Button>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function SavedEventsTab() {
+  const { data: savedData, isLoading } = useSavedEvents();
+  const unsaveMutation = useUnsaveEvent();
+  const events = (savedData?.data || []).filter(Boolean);
+
+  const handleUnsave = async (eventId: string) => {
+    try {
+      await unsaveMutation.mutateAsync(eventId);
+      toast.success("Event removed from saved");
+    } catch {
+      toast.error("Failed to remove event");
+    }
+  };
+
+  if (isLoading) {
+    return (
+      <div className="rounded-xl border bg-background p-6 space-y-4">
+        {Array.from({ length: 3 }).map((_, i) => (
+          <div key={i} className="h-14 bg-muted rounded-lg animate-pulse" />
+        ))}
+      </div>
+    );
+  }
+
+  if (events.length === 0) {
+    return (
+      <div className="rounded-xl border bg-background p-12 text-center">
+        <div className="h-16 w-16 rounded-full bg-muted flex items-center justify-center mx-auto mb-4">
+          <Bookmark className="h-8 w-8 text-muted-foreground" />
+        </div>
+        <h3 className="text-xl font-semibold mb-2">No saved events</h3>
+        <p className="text-muted-foreground mb-6">
+          Save events to come back to them later.
+        </p>
+        <Link href="/events">
+          <Button className="gap-2">
+            <Eye className="h-4 w-4" />
+            Browse Events
+          </Button>
+        </Link>
+      </div>
+    );
+  }
+
+  return (
+    <div className="grid gap-4">
+      {events.map((ev) => (
+        <div key={ev._id} className="rounded-xl border bg-background p-5 flex items-center justify-between gap-4">
+          <div className="min-w-0 flex-1">
+            <Link href={`/events/${ev._id}`} className="font-medium text-sm hover:underline truncate block">
+              {ev.title}
+            </Link>
+            <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-muted-foreground mt-0.5">
+              <span>{new Date(ev.date).toLocaleDateString()}</span>
+              <span>{ev.location}</span>
+            </div>
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-1.5 shrink-0 text-destructive hover:text-destructive"
+            onClick={() => handleUnsave(ev._id)}
+            disabled={unsaveMutation.isPending && unsaveMutation.variables === ev._id}
+          >
+            {unsaveMutation.isPending && unsaveMutation.variables === ev._id ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <Bookmark className="h-3.5 w-3.5 fill-current" />
+            )}
+            Remove
+          </Button>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 const CHART_COLORS = ["hsl(var(--primary))", "#8b5cf6", "#f59e0b", "#10b981", "#ef4444", "#06b6d4", "#ec4899", "#14b8a6"];
 
 function AdminOverviewTab() {
@@ -1282,6 +1449,8 @@ export function DashboardPage() {
   const userTabs = [
     { id: "overview", label: "Overview", icon: LayoutDashboard },
     { id: "events", label: "My Events", icon: Calendar },
+    { id: "my-registrations", label: "My Registered", icon: Ticket },
+    { id: "saved-events", label: "Saved Events", icon: Bookmark },
     { id: "registrations", label: "Registrations", icon: Users },
     { id: "create", label: "Create Event", icon: Plus },
     { id: "profile", label: "Profile", icon: User },
@@ -1301,6 +1470,8 @@ export function DashboardPage() {
   const userComponents: Record<string, React.ElementType> = {
     overview: OverviewTab,
     events: EventsTab,
+    "my-registrations": MyRegisteredTab,
+    "saved-events": SavedEventsTab,
     registrations: RegistrationsTab,
     create: CreateEventTab,
     profile: ProfileTab,
@@ -1401,6 +1572,8 @@ export function DashboardPage() {
               {activeTab === "overview" && `Welcome back, ${user?.name?.split(" ")[0]}`}
               {activeTab === "pending" && "Pending Approval"}
               {activeTab === "events" && "My Events"}
+              {activeTab === "my-registrations" && "My Registered Events"}
+              {activeTab === "saved-events" && "Saved Events"}
               {activeTab === "registrations" && "Registrations"}
               {activeTab === "all-events" && "All Events"}
               {activeTab === "users" && "Users"}
@@ -1411,6 +1584,8 @@ export function DashboardPage() {
               {activeTab === "pending" && "Review and approve or reject events submitted by users."}
               {activeTab === "overview" && (isAdmin ? "Platform overview and statistics." : "Here&apos;s what&apos;s happening with your events.")}
               {activeTab === "events" && "Manage and monitor all your events."}
+              {activeTab === "my-registrations" && "Events you have registered for."}
+              {activeTab === "saved-events" && "Events you have bookmarked."}
               {activeTab === "registrations" && "View who registered for your events."}
               {activeTab === "all-events" && "Manage all events on the platform."}
               {activeTab === "users" && "View all registered users."}

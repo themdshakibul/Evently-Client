@@ -18,6 +18,7 @@ import { Button } from "@/components/ui/button";
 import { ProtectedRoute } from "@/components/protected-route";
 import { useEvent, useRelatedEvents } from "@/hooks/useEvents";
 import { useRegisterForEvent, useCancelRegistration, useMyRegistrations } from "@/hooks/useRegistrations";
+import { useSavedEvents, useSaveEvent, useUnsaveEvent } from "@/hooks/useSavedEvents";
 import { useAuth } from "@/components/providers";
 import { toast } from "sonner";
 
@@ -37,15 +38,20 @@ function EventDetailContent() {
   const { data: eventData, isLoading } = useEvent(id);
   const { data: relatedData } = useRelatedEvents(id);
   const { data: myRegsData } = useMyRegistrations(!!user);
+  const { data: savedData } = useSavedEvents();
   const registerMutation = useRegisterForEvent();
   const cancelMutation = useCancelRegistration();
+  const saveMutation = useSaveEvent();
+  const unsaveMutation = useUnsaveEvent();
 
   const [activeTab, setActiveTab] = useState<(typeof tabs)[number]>("Overview");
 
   const event = eventData?.data;
   const related = relatedData?.data || [];
   const myRegs = myRegsData?.data || [];
+  const savedEvents = savedData?.data || [];
   const isRegistered = myRegs.some((r) => (typeof r.event === "string" ? r.event === id : r.event._id === id));
+  const isSaved = savedEvents.some((e) => e && e._id === id);
 
   if (isLoading) {
     return (
@@ -83,6 +89,35 @@ function EventDetailContent() {
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Failed to cancel registration";
       toast.error(msg);
+    }
+  };
+
+  const handleSave = async () => {
+    try {
+      await saveMutation.mutateAsync(id);
+      toast.success("Event saved!");
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Failed to save event";
+      toast.error(msg);
+    }
+  };
+
+  const handleUnsave = async () => {
+    try {
+      await unsaveMutation.mutateAsync(id);
+      toast.success("Event removed from saved");
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Failed to unsave event";
+      toast.error(msg);
+    }
+  };
+
+  const handleShare = async () => {
+    if (navigator.share) {
+      await navigator.share({ title: event.title, url: window.location.href });
+    } else {
+      await navigator.clipboard.writeText(window.location.href);
+      toast.success("Link copied to clipboard");
     }
   };
 
@@ -264,11 +299,32 @@ function EventDetailContent() {
               )}
 
               <div className="flex gap-2">
-                <Button variant="outline" size="sm" className="flex-1 gap-2">
-                  <Bookmark className="h-4 w-4" />
-                  Save
-                </Button>
-                <Button variant="outline" size="sm" className="flex-1 gap-2">
+                {user && (
+                  isSaved ? (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="flex-1 gap-2"
+                      onClick={handleUnsave}
+                      disabled={unsaveMutation.isPending}
+                    >
+                      <Bookmark className="h-4 w-4 fill-primary text-primary" />
+                      {unsaveMutation.isPending ? "Removing..." : "Saved"}
+                    </Button>
+                  ) : (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="flex-1 gap-2"
+                      onClick={handleSave}
+                      disabled={saveMutation.isPending}
+                    >
+                      <Bookmark className="h-4 w-4" />
+                      {saveMutation.isPending ? "Saving..." : "Save"}
+                    </Button>
+                  )
+                )}
+                <Button variant="outline" size="sm" className="flex-1 gap-2" onClick={handleShare}>
                   <Share2 className="h-4 w-4" />
                   Share
                 </Button>
